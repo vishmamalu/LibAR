@@ -1,0 +1,19 @@
+# Python virtual environment
+.venv/
+venv/
+ENV/
+env/
+
+# Byte-compiled / optimized files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# SQLite database file (auto-generated on app launch)
+# Uncomment the line below if you don't want the database file in GitHub:
+# data/library.db
+
+# OS generated files
+.DS_Store
+Thumbs.db
+*.log

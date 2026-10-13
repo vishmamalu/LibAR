@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover">
+  <meta name="theme-color" content="#6355d8">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="LibAR">
+  <meta name="description" content="LibAR — Mobile Augmented Reality Library Navigation & Book Discovery">
+  <title>LibAR — Mobile AR Library Navigation</title>
+  
+  <link rel="manifest" href="/manifest.json">
+  <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" href="/static/icons/favicon.png">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand-wrap">
+    <div class="brand">
+      <span class="brand-mark">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
+      </span>
+      <span>Lib<span>AR</span></span>
+    </div>
+    <span class="mobile-badge">Mobile AR Ready</span>
+  </div>
+  <div class="topbar-actions">
+    <button id="qrShareBtn" class="topbar-btn" title="Open on Mobile / Share QR">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+      <span>Mobile QR</span>
+    </button>
+    <button id="markerRefBtn" class="topbar-btn" title="View AR Marker">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="m10 15 5-3-5-3v6z"></path></svg>
+      <span>AR Marker</span>
+    </button>
+  </div>
+</header>
+
+<main class="container">
+  <!-- Hero Section -->
+  <section class="hero">
+    <div class="hero-text">
+      <div class="eyebrow">SMART AUGMENTED REALITY LIBRARY</div>
+      <h1>Find your book.<br><span>Follow the AR path.</span></h1>
+      <p>Search academic books, locate precise shelf coordinates, and navigate using real-time motion-responsive 3D guidance or live camera AR.</p>
+    </div>
+    <div class="stats" id="stats">
+      <div class="stat-card"><strong id="titles">—</strong><small>Books</small></div>
+      <div class="stat-card"><strong id="available">—</strong><small>Available</small></div>
+      <div class="stat-card"><strong id="subjects">—</strong><small>Subjects</small></div>
+      <div class="stat-card"><strong id="shelves">—</strong><small>Shelves</small></div>
+    </div>
+  </section>
+
+  <!-- Search & Filter Panel -->
+  <section class="search-panel">
+    <div class="search-box-wrap">
+      <div class="search-row">
+        <svg class="search-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.35-4.35"></path></svg>
+        <input id="search" autocomplete="off" placeholder="Search title, author, ML, DBMS, Networks, AI..." aria-label="Search library catalogue">
+        <button id="clearSearchBtn" class="clear-btn hidden" aria-label="Clear search">✕</button>
+        <button id="searchBtn">Search</button>
+      </div>
+      <!-- Autocomplete Dropdown -->
+      <div id="suggestions" class="suggestions hidden"></div>
+    </div>
+
+    <!-- Filter Pills -->
+    <div class="filter-pills" id="filterPills">
+      <button class="pill active" data-category="all">All Books</button>
+      <button class="pill" data-category="Artificial Intelligence">AI & Machine Learning</button>
+      <button class="pill" data-category="Database">Databases</button>
+      <button class="pill" data-category="Systems">Systems & OS</button>
+      <button class="pill" data-category="Algorithms">Algorithms</button>
+      <button class="pill" data-category="Networking">Networks & Cloud</button>
+      <button class="pill toggle-pill" id="availableOnlyToggle">🟢 Available Only</button>
+    </div>
+
+    <div id="error" class="error hidden"></div>
+  </section>
+
+  <!-- Books and Recommendations Grid -->
+  <section class="grid">
+    <!-- Results Column -->
+    <div class="panel">
+      <div class="panel-head">
+        <div class="panel-title-wrap">
+          <h2>Catalogue Discovery</h2>
+          <span id="resultCount" class="badge">Loading books…</span>
+        </div>
+      </div>
+      <div id="results" class="results empty">Search catalogue or pick a category above.</div>
+    </div>
+
+    <!-- Recommendations Column -->
+    <div class="panel">
+      <div class="panel-head">
+        <div class="panel-title-wrap">
+          <h2>Smart Recommendations</h2>
+          <span class="badge badge-accent">Content Matching</span>
+        </div>
+      </div>
+      <div id="recommendations" class="results empty">Search for a book to view content-based recommendations.</div>
+    </div>
+  </section>
+
+  <!-- Route & Indoor Wayfinding Panel -->
+  <section class="panel route-panel" id="routePanel">
+    <div class="panel-head">
+      <div class="panel-title-wrap">
+        <h2>Indoor Navigation & Floor Wayfinding</h2>
+        <span id="routeStatus" class="badge">Select a book to route</span>
+      </div>
+      <div class="start-selector-wrap">
+        <label for="startNodeSelect">Starting at:</label>
+        <select id="startNodeSelect">
+          <option value="ENTRANCE" selected>Library Entrance</option>
+          <option value="MAIN_DESK">Main Information Desk</option>
+          <option value="A1">A1 · Algorithms Shelf</option>
+          <option value="A2">A2 · AI/ML Section</option>
+          <option value="CS_SHELF">CS · Computer Science Shelf</option>
+          <option value="AI_SHELF">AI · Artificial Intelligence</option>
+          <option value="DB_SHELF">DB · Database & Arch Shelf</option>
+          <option value="NETWORK_SHELF">Network & Cloud Shelf</option>
+        </select>
+      </div>
+    </div>
+
+    <div id="routeEmpty" class="empty route-empty">
+      <div class="empty-icon">📍</div>
+      <h3>No Destination Selected</h3>
+      <p>Click <b>"Navigate in AR / 3D"</b> on any book above to generate indoor turn-by-turn guidance and 3D wayfinding.</p>
+    </div>
+
+    <div id="routeContent" class="route-content hidden">
+      <div class="route-info">
+        <div class="selected-book" id="selectedBook"></div>
+        <div class="route-stats">
+          <span class="stat-pill"><strong id="routeDistance">—</strong> Distance</span>
+          <span class="stat-pill"><strong id="routeWaypoints">—</strong> Waypoints</span>
+          <span class="stat-pill"><strong id="routeTime">—</strong> Walk Time</span>
+          <span id="routeAvailability" class="stat-pill"></span>
+        </div>
+
+        <!-- Navigation Mode Launch Buttons -->
+        <div class="ar-actions-grid">
+          <a id="launchAR" class="ar-button ar-cam-btn" href="#" target="_blank">
+            <span class="ar-btn-icon">📷</span>
+            <div class="ar-btn-text">
+              <strong>Launch Mobile Camera AR</strong>
+              <small>Live spatial overlay & direction arrow</small>
+            </div>
+          </a>
+          <a id="launchVR" class="ar-button ar-vr-btn" href="#" target="_blank">
+            <span class="ar-btn-icon">🌐</span>
+            <div class="ar-btn-text">
+              <strong>Enter 3D Virtual Library</strong>
+              <small>Phone gyroscopic look & walk controls</small>
+            </div>
+          </a>
+        </div>
+
+        <h4 class="steps-heading">Turn-by-Turn Maneuvers</h4>
+        <ol id="routeSteps" class="route-steps"></ol>
+      </div>
+
+      <div class="map-wrap">
+        <div class="map-header">
+          <span>Floor 1 Layout · Interactive Map</span>
+          <div class="map-legend">
+            <span class="legend-item"><span class="dot active-dot"></span> Active Path</span>
+            <span class="legend-item"><span class="dot dest-dot"></span> Destination</span>
+          </div>
+        </div>
+        <div class="map" id="map">
+          <div class="map-node entrance" data-node="ENTRANCE">ENTRANCE</div>
+          <div class="map-node desk" data-node="MAIN_DESK">MAIN<br>DESK</div>
+          <div class="map-node a1" data-node="A1">A1<br>ALGORITHMS</div>
+          <div class="map-node a2" data-node="A2">A2<br>AI / ML</div>
+          <div class="map-node cs" data-node="CS_SHELF">CS<br>SHELF</div>
+          <div class="map-node ai" data-node="AI_SHELF">AI<br>SHELF</div>
+          <div class="map-node db" data-node="DB_SHELF">DB<br>SHELF</div>
+          <div class="map-node net" data-node="NETWORK_SHELF">NETWORK<br>SHELF</div>
+          <div class="map-node exit" data-node="EXIT">EXIT</div>
+          <svg class="route-line" id="routeLine" viewBox="0 0 1000 600" preserveAspectRatio="none"></svg>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- Book Detail Bottom Sheet / Modal -->
+<div id="bookModal" class="modal hidden">
+  <div class="modal-backdrop" id="modalBackdrop"></div>
+  <div class="modal-content">
+    <div class="modal-handle"></div>
+    <div class="modal-body" id="modalBody"></div>
+  </div>
+</div>
+
+<!-- QR Share Modal -->
+<div id="qrModal" class="modal hidden">
+  <div class="modal-backdrop" id="qrModalBackdrop"></div>
+  <div class="modal-content modal-center">
+    <button class="modal-close" id="closeQrModal">✕</button>
+    <h3>📱 Open LibAR on Your Mobile Phone</h3>
+    <p class="small-desc">Scan this QR code with your iPhone (Camera app) or Android phone to launch LibAR instantly with full AR motion support!</p>
+    <div id="qrCodeContainer" class="qr-container"></div>
+    <div class="qr-url-box">
+      <input id="mobileUrlInput" readonly>
+      <button id="copyUrlBtn">Copy Link</button>
+    </div>
+  </div>
+</div>
+
+<!-- AR Marker Reference Modal -->
+<div id="markerModal" class="modal hidden">
+  <div class="modal-backdrop" id="markerModalBackdrop"></div>
+  <div class="modal-content modal-center">
+    <button class="modal-close" id="closeMarkerModal">✕</button>
+    <h3>🎯 Hiro Marker for Optical AR</h3>
+    <p class="small-desc">Point your phone camera at this Hiro marker in Camera AR mode to anchor 3D shelf pointers and waypoints in real space.</p>
+    <div class="marker-img-wrap">
+      <img src="/static/markers/hiro.png" alt="Hiro Marker for AR.js" width="240" height="240">
+    </div>
+    <div class="modal-tip">Tip: Open this marker on your laptop screen and scan it with your phone's camera!</div>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<!-- Scripts -->
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+<script src="/static/app.js"></script>
+<script>
+  // Register Service Worker for PWA
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js').catch(err => console.log('SW reg fail:', err));
+    });
+  }
+</script>
+</body>
+</html>

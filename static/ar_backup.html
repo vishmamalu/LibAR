@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>LibAR — AR Book Guidance</title>
+<script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
+<script src="https://raw.githack.com/AR-js-org/AR.js/3.4.8/aframe/build/aframe-ar.js"></script>
+<style>
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000;font-family:Inter,Arial,sans-serif}
+#hud{position:fixed;z-index:9999;top:14px;left:14px;right:14px;padding:17px 19px;background:rgba(18,17,32,.91);color:#fff;border-radius:17px;backdrop-filter:blur(10px);box-shadow:0 10px 30px rgba(0,0,0,.25)}
+#hud h1{font-size:19px;margin:0 0 7px}#status{color:#b9b0ff;font-size:13px;margin-bottom:8px}#book,#destination,#route{font-size:12px;margin-top:4px}#destination{font-weight:800}#route{color:#d0cedb}
+#back{position:fixed;z-index:9999;bottom:18px;right:18px;padding:12px 18px;border-radius:12px;background:#7568df;color:#fff;text-decoration:none;font-weight:800;font-size:13px}
+#help{position:fixed;z-index:9999;bottom:18px;left:18px;max-width:310px;background:rgba(18,17,32,.88);color:#fff;border-radius:12px;padding:11px 13px;font-size:11px;line-height:1.4}
+video{position:fixed!important;inset:0!important;width:100%!important;height:100%!important;object-fit:cover!important;z-index:0!important}canvas{position:fixed!important;inset:0!important;width:100%!important;height:100%!important;z-index:1!important}
+</style>
+</head>
+<body>
+<div id="hud"><h1>📚 LibAR · AR Book Guidance</h1><div id="status">Starting AR camera…</div><div id="book">Selected book: —</div><div id="destination">📍 Destination: —</div><div id="route">Route: —</div></div>
+<div id="help">Point the camera at the printed <b>Hiro marker</b>. Keep the whole marker visible. The virtual shelf appears when the marker is detected.</div>
+<a id="back" href="/">← Dashboard</a>
+<a-scene embedded vr-mode-ui="enabled:false" renderer="alpha:true;antialias:true;precision:mediump" arjs="sourceType:webcam;trackingMethod:best;debugUIEnabled:false;">
+  <a-marker id="marker" preset="hiro" emitevents="true">
+    <a-ring position="0 0.03 0" rotation="-90 0 0" radius-inner="0.72" radius-outer="0.82" color="#7568df" opacity="0.95"></a-ring>
+    <a-box position="0 0.38 0" width="1.45" height="0.55" depth="0.28" material="color:#7568df;opacity:.92;side:double"></a-box>
+    <a-box position="0 0.18 0" width="1.55" height="0.06" depth="0.58" material="color:#ffffff;opacity:.98;side:double"></a-box>
+    <a-box position="-0.43 0.34 0.18" width="0.18" height="0.30" depth="0.22" material="color:#e9e6ff"></a-box>
+    <a-box position="-0.19 0.34 0.18" width="0.18" height="0.30" depth="0.22" material="color:#e9e6ff"></a-box>
+    <a-box position="0.30 0.34 0.18" width="0.18" height="0.30" depth="0.22" material="color:#e9e6ff"></a-box>
+    <a-box position="0.54 0.34 0.18" width="0.18" height="0.30" depth="0.22" material="color:#e9e6ff"></a-box>
+    <a-text id="shelfLabel" value="SHELF" position="0 0.82 0" scale="0.82 0.82 0.82" color="#ffffff" align="center"></a-text>
+    <a-text id="destinationLabel" value="DESTINATION" position="0 1.12 0" scale="0.48 0.48 0.48" color="#ffffff" align="center"></a-text>
+    <a-cone position="0 1.48 0" rotation="180 0 0" radius-bottom="0.22" radius-top="0.02" height="0.38" color="#ffffff"></a-cone>
+  </a-marker>
+  <a-entity camera></a-entity>
+</a-scene>
+<script>
+const p=new URLSearchParams(location.search);
+const book=p.get('title')||'Selected book';
+const shelf=p.get('shelf')||'SHELF';
+const route=(p.get('route')||'').split('→').filter(Boolean);
+const status=document.getElementById('status');
+document.getElementById('book').textContent='Selected book: '+book;
+document.getElementById('destination').textContent='📍 Destination: '+shelf;
+document.getElementById('route').textContent='Route: '+(route.length?route.join(' → '):'Calculated route');
+document.getElementById('shelfLabel').setAttribute('value',shelf.replace('_',' '));
+document.getElementById('destinationLabel').setAttribute('value','DESTINATION');
+const marker=document.getElementById('marker');
+marker.addEventListener('markerFound',()=>{status.textContent='✓ Shelf anchor detected — AR guidance active';});
+marker.addEventListener('markerLost',()=>{status.textContent='Marker lost — point the camera at the Hiro marker';});
+window.addEventListener('load',()=>setTimeout(()=>{if(status.textContent.startsWith('Starting'))status.textContent='AR ready — point the camera at the Hiro marker';},3000));
+</script>
+</body>
+</html>

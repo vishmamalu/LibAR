@@ -1,0 +1,1185 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no,viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#100f1c">
+  <title>LibAR — Mobile AR Guidance</title>
+
+  <!-- A-Frame & AR.js Libraries -->
+  <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
+  <script src="https://raw.githack.com/AR-js-org/AR.js/3.4.8/aframe/build/aframe-ar.js"></script>
+
+  <style>
+    :root {
+      --accent: #6355d8;
+      --accent-light: #8a7cf0;
+      --good: #10b981;
+      --warning: #f59e0b;
+      --bad: #ef4444;
+      --hud-bg: rgba(16, 15, 28, 0.88);
+      --hud-border: rgba(255, 255, 255, 0.12);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #080812; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif; color: #fff; }
+
+    /* Scene Containers */
+    #desktopScene, #arScene { position: fixed; inset: 0; width: 100%; height: 100%; display: none; }
+    #desktopScene.active, #arScene.active { display: block; }
+
+    /* HUD Top Bar */
+    #topHud {
+      position: fixed;
+      top: env(safe-area-inset-top, 12px);
+      left: 12px;
+      right: 12px;
+      z-index: 1000;
+      background: var(--hud-bg);
+      border: 1px solid var(--hud-border);
+      border-radius: 16px;
+      padding: 12px 16px;
+      backdrop-filter: blur(12px);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .book-meta { min-width: 0; flex: 1; }
+    .book-title-hud { font-size: 14px; font-weight: 800; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .shelf-dest-hud { font-size: 11px; color: var(--accent-light); font-weight: 700; margin-top: 2px; }
+    .tracking-status { font-size: 10px; color: #a19fc2; margin-top: 2px; display: flex; align-items: center; gap: 4px; }
+    .status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--good); }
+
+    .top-controls { display: flex; gap: 6px; flex-shrink: 0; }
+    .hud-btn {
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid var(--hud-border);
+      color: #fff;
+      border-radius: 10px;
+      width: 38px;
+      height: 38px;
+      display: grid;
+      place-items: center;
+      font-size: 15px;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.1s;
+    }
+    .hud-btn:active { transform: scale(0.92); }
+    .hud-btn.active { background: var(--accent); border-color: var(--accent); }
+
+    /* Mode Switcher Bar */
+    #modeBar {
+      position: fixed;
+      top: calc(env(safe-area-inset-top, 12px) + 76px);
+      left: 12px;
+      right: 12px;
+      z-index: 1000;
+      display: flex;
+      gap: 8px;
+    }
+
+    .mode-btn {
+      flex: 1;
+      padding: 10px 12px;
+      background: var(--hud-bg);
+      border: 1px solid var(--hud-border);
+      border-radius: 12px;
+      color: #ccc;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      backdrop-filter: blur(10px);
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    .mode-btn.active {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+      box-shadow: 0 4px 14px rgba(99, 85, 216, 0.4);
+    }
+
+    /* Spatial Compass AR View (Overlay) */
+    #spatialArOverlay {
+      position: fixed;
+      inset: 0;
+      z-index: 500;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .spatial-arrow-wrap {
+      width: 140px;
+      height: 140px;
+      position: relative;
+      display: grid;
+      place-items: center;
+      transition: transform 0.15s ease-out;
+    }
+
+    .compass-ring {
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      border: 2px dashed rgba(255, 255, 255, 0.3);
+      box-shadow: 0 0 20px rgba(99, 85, 216, 0.2);
+    }
+
+    .ar-arrow-3d {
+      width: 60px;
+      height: 60px;
+      filter: drop-shadow(0 6px 14px rgba(0,0,0,0.6));
+      transform-origin: center center;
+      transition: transform 0.1s linear, fill 0.2s;
+    }
+
+    .spatial-heading-banner {
+      margin-top: 14px;
+      background: rgba(16, 15, 28, 0.85);
+      border: 1px solid var(--hud-border);
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.5px;
+      backdrop-filter: blur(8px);
+    }
+
+    /* Bottom Navigation Card */
+    #navigationCard {
+      position: fixed;
+      left: 12px;
+      right: 12px;
+      bottom: calc(env(safe-area-inset-bottom, 12px) + 60px);
+      z-index: 1000;
+      background: var(--hud-bg);
+      border: 1px solid var(--hud-border);
+      border-radius: 18px;
+      padding: 14px 16px;
+      backdrop-filter: blur(14px);
+      box-shadow: 0 12px 35px rgba(0,0,0,0.45);
+    }
+
+    .nav-main { display: flex; align-items: center; gap: 14px; }
+    .maneuver-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, var(--accent), #4f42b5);
+      display: grid;
+      place-items: center;
+      font-size: 22px;
+      font-weight: 900;
+      flex-shrink: 0;
+      box-shadow: 0 4px 12px rgba(99, 85, 216, 0.3);
+    }
+
+    .nav-text-block { flex: 1; min-width: 0; }
+    .nav-instruction { font-size: 14px; font-weight: 800; color: #fff; line-height: 1.3; }
+    .nav-subtext { font-size: 11px; color: #aaa6c8; margin-top: 3px; }
+
+    .nav-progress-bar {
+      height: 4px;
+      background: rgba(255, 255, 255, 0.12);
+      border-radius: 4px;
+      margin-top: 10px;
+      overflow: hidden;
+    }
+    .nav-progress-fill {
+      height: 100%;
+      width: 0;
+      background: linear-gradient(90deg, var(--accent), var(--good));
+      transition: width 0.3s ease;
+    }
+
+    /* Step Navigation Controls */
+    .step-controls {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 10px;
+    }
+
+    .step-btn {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid var(--hud-border);
+      color: #fff;
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .step-btn:hover { background: rgba(255, 255, 255, 0.15); }
+    .step-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+    .step-dots { display: flex; gap: 4px; }
+    .step-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.2);
+    }
+    .step-dot.active { background: var(--accent); width: 14px; border-radius: 4px; }
+    .step-dot.done { background: var(--good); }
+
+    /* Bottom Quick Action Bar */
+    #bottomBar {
+      position: fixed;
+      left: 12px;
+      right: 12px;
+      bottom: env(safe-area-inset-bottom, 12px);
+      z-index: 1000;
+      display: flex;
+      gap: 8px;
+    }
+
+    .action-btn {
+      flex: 1;
+      padding: 10px 14px;
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid var(--hud-border);
+      border-radius: 12px;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      backdrop-filter: blur(10px);
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .action-btn-primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      box-shadow: 0 4px 14px rgba(99, 85, 216, 0.35);
+    }
+
+    /* Virtual Joystick for Mobile 3D Locomotion */
+    #virtualJoystick {
+      position: fixed;
+      left: 24px;
+      bottom: 140px;
+      width: 100px;
+      height: 100px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.08);
+      border: 2px solid rgba(255, 255, 255, 0.2);
+      backdrop-filter: blur(8px);
+      z-index: 900;
+      display: none;
+      touch-action: none;
+    }
+    #virtualJoystick.active { display: block; }
+    #joystickKnob {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 40px;
+      height: 40px;
+      margin: -20px 0 0 -20px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    /* Permission Prompt Overlay */
+    #permissionModal {
+      position: fixed;
+      inset: 0;
+      z-index: 2000;
+      background: rgba(10, 9, 20, 0.88);
+      backdrop-filter: blur(12px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      transition: opacity 0.2s ease, visibility 0.2s ease;
+    }
+    #permissionModal.hidden {
+      display: none !important;
+      visibility: hidden !important;
+      opacity: 0 !important;
+      pointer-events: none !important;
+    }
+    .perm-card {
+      position: relative;
+      background: #18172b;
+      border: 1px solid var(--hud-border);
+      border-radius: 20px;
+      padding: 28px 22px;
+      text-align: center;
+      max-width: 360px;
+      width: 100%;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.6);
+    }
+    .modal-close-btn {
+      position: absolute;
+      top: 14px;
+      right: 14px;
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: #fff;
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      display: grid;
+      place-items: center;
+    }
+    .perm-icon { font-size: 44px; margin-bottom: 12px; }
+    .perm-card h2 { font-size: 20px; font-weight: 800; margin-bottom: 8px; }
+    .perm-card p { font-size: 13px; color: #a5a2c4; line-height: 1.5; margin-bottom: 18px; }
+    .perm-btn {
+      width: 100%;
+      padding: 14px;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 12px;
+      font-size: 15px;
+      font-weight: 800;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.1s;
+    }
+    .perm-btn:active { transform: scale(0.98); }
+    .perm-btn-secondary {
+      background: rgba(255, 255, 255, 0.08) !important;
+      border: 1px solid var(--hud-border) !important;
+      color: #d1ceed !important;
+      margin-top: 10px;
+      font-size: 13px !important;
+      font-weight: 600 !important;
+    }
+
+    /* Arrival Banner */
+    #arrivalBanner {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) scale(0.9);
+      background: rgba(16, 15, 28, 0.95);
+      border: 2px solid var(--good);
+      border-radius: 22px;
+      padding: 24px;
+      text-align: center;
+      z-index: 1500;
+      max-width: 320px;
+      box-shadow: 0 20px 60px rgba(16, 185, 129, 0.35);
+      opacity: 0;
+      pointer-events: none;
+      transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+    #arrivalBanner.show {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1);
+      pointer-events: auto;
+    }
+    .arrival-icon { font-size: 48px; margin-bottom: 10px; }
+
+    /* Video & AR.js overrides */
+    #arScene video {
+      position: fixed !important;
+      inset: 0 !important;
+      width: 100% !important;
+      height: 100% !important;
+      object-fit: cover !important;
+      z-index: 0 !important;
+    }
+    #arScene canvas {
+      position: fixed !important;
+      inset: 0 !important;
+      width: 100% !important;
+      height: 100% !important;
+      z-index: 1 !important;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Permission Modal for Mobile Motion Sensors & Camera -->
+  <div id="permissionModal" class="hidden">
+    <div class="perm-card">
+      <button class="modal-close-btn" id="closePermModalBtn" title="Dismiss" aria-label="Close modal">✕</button>
+      <div class="perm-icon">🧭</div>
+      <h2>Enable Motion & AR</h2>
+      <p id="permDescText">LibAR uses your phone's gyroscope and camera to orient directions naturally as you turn your phone around the library.</p>
+      <button class="perm-btn" id="grantPermissionBtn">Start AR Guidance</button>
+      <button class="perm-btn perm-btn-secondary" id="manualModeBtn">Continue in Manual Mode</button>
+    </div>
+  </div>
+
+  <!-- HUD Top Bar -->
+  <div id="topHud">
+    <div class="book-meta">
+      <div class="book-title-hud" id="hudBookTitle">Intro to Algorithms</div>
+      <div class="shelf-dest-hud" id="hudDestination">📍 Shelf: A1 · Floor 1</div>
+      <div class="tracking-status" id="hudTracking">
+        <span class="status-dot" id="statusDot"></span>
+        <span id="trackingText">Sensors Active · Gyro Synced</span>
+      </div>
+    </div>
+    <div class="top-controls">
+      <button class="hud-btn" id="recenterBtn" title="Recenter View">🎯</button>
+      <button class="hud-btn" id="speechBtn" title="Voice Guidance">🔊</button>
+      <button class="hud-btn" id="torchBtn" title="Flashlight">💡</button>
+    </div>
+  </div>
+
+  <!-- Mode Switcher -->
+  <div id="modeBar">
+    <button class="mode-btn active" id="modeCameraAr">📷 Camera AR</button>
+    <button class="mode-btn" id="mode3dVirtual">🌐 3D Library</button>
+  </div>
+
+  <!-- Spatial Compass AR Overlay -->
+  <div id="spatialArOverlay">
+    <div class="spatial-arrow-wrap" id="spatialArrowWrap">
+      <div class="compass-ring"></div>
+      <svg class="ar-arrow-3d" id="arArrowSvg" viewBox="0 0 24 24" fill="#10b981">
+        <path d="M12 2L4 14h5v8h6v-8h5L12 2z"></path>
+      </svg>
+    </div>
+    <div class="spatial-heading-banner" id="headingBanner">Straight Ahead · 0°</div>
+  </div>
+
+  <!-- Navigation Card -->
+  <div id="navigationCard">
+    <div class="nav-main">
+      <div class="maneuver-icon" id="maneuverIcon">↑</div>
+      <div class="nav-text-block">
+        <div class="nav-instruction" id="stepInstruction">Head straight toward Algorithms Shelf</div>
+        <div class="nav-subtext" id="stepSubtext">Step 1 of 3 · 4.0 meters</div>
+      </div>
+    </div>
+    <div class="nav-progress-bar">
+      <div class="nav-progress-fill" id="progressFill"></div>
+    </div>
+    <div class="step-controls">
+      <button class="step-btn" id="prevStepBtn" disabled>← Previous</button>
+      <div class="step-dots" id="stepDots"></div>
+      <button class="step-btn" id="nextStepBtn">Next Step →</button>
+    </div>
+  </div>
+
+  <!-- Bottom Action Bar -->
+  <div id="bottomBar">
+    <a class="action-btn" href="/">← Dashboard</a>
+    <button class="action-btn action-btn-primary" id="stepAdvanceBtn">👣 Step Forward</button>
+  </div>
+
+  <!-- Virtual Joystick for 3D View -->
+  <div id="virtualJoystick">
+    <div id="joystickKnob"></div>
+  </div>
+
+  <!-- Arrival Celebration Modal -->
+  <div id="arrivalBanner">
+    <div class="arrival-icon">🎉</div>
+    <h2 style="font-size:18px;margin-bottom:6px">Destination Reached!</h2>
+    <p id="arrivalShelfText" style="font-size:13px;color:#c8c4e6;margin-bottom:16px">Your book is located on Algorithms Shelf A1</p>
+    <button class="perm-btn" onclick="$('arrivalBanner').classList.remove('show')">Done Navigating</button>
+  </div>
+
+  <!-- 3D VIRTUAL LIBRARY SCENE -->
+  <a-scene id="desktopScene" embedded renderer="antialias:true;colorManagement:true" background="color:#0d0d17" device-orientation-permission-ui="enabled: false" vr-mode-ui="enabled: false">
+    <!-- Camera Rig -->
+    <a-entity id="cameraRig" position="0 1.6 7">
+      <a-entity id="virtualCamera" camera look-controls="enabled: false"></a-entity>
+    </a-entity>
+
+    <!-- Illumination -->
+    <a-entity light="type:ambient;intensity:1.4;color:#ffffff"></a-entity>
+    <a-entity light="type:directional;intensity:1.2;color:#ffffff" position="-5 10 5"></a-entity>
+
+    <!-- Library Floor -->
+    <a-plane rotation="-90 0 0" width="30" height="36" color="#1a1928" material="roughness:0.8;metalness:0.1"></a-plane>
+
+    <!-- Walls -->
+    <a-box position="0 3 -18" width="30" height="6" depth="0.4" color="#161524"></a-box>
+    <a-box position="-15 3 0" rotation="0 90 0" width="36" height="6" depth="0.4" color="#161524"></a-box>
+    <a-box position="15 3 0" rotation="0 90 0" width="36" height="6" depth="0.4" color="#161524"></a-box>
+
+    <!-- Entrance Archway -->
+    <a-entity position="0 0 7">
+      <a-box position="-2 2 0" width="0.4" height="4" depth="0.4" color="#6355d8"></a-box>
+      <a-box position="2 2 0" width="0.4" height="4" depth="0.4" color="#6355d8"></a-box>
+      <a-box position="0 4 0" width="4.4" height="0.4" depth="0.4" color="#6355d8"></a-box>
+      <a-text value="LIBRARY ENTRANCE" position="0 3.5 0" align="center" width="6" color="#ffffff"></a-text>
+    </a-entity>
+
+    <!-- Help Desk -->
+    <a-entity position="0 0 4">
+      <a-box position="0 0.6 0" width="4.5" height="1.2" depth="1.2" color="#3c375c"></a-box>
+      <a-box position="0 1.25 0" width="4.8" height="0.1" depth="1.4" color="#5a5285"></a-box>
+      <a-text value="INFORMATION & HELP DESK" position="0 1.6 0.7" align="center" width="4" color="#ffffff"></a-text>
+    </a-entity>
+
+    <!-- Shelves (Digital Twin) -->
+    <!-- A1: Algorithms -->
+    <a-entity id="shelf3d-A1" position="-7 0 -1">
+      <a-box position="0 1.4 0" width="4.8" height="2.8" depth="0.9" color="#6355d8"></a-box>
+      <a-text value="A1 · ALGORITHMS" position="0 3.1 -0.5" align="center" width="6" color="#ffffff"></a-text>
+      <a-box position="0 0.5 -0.5" width="4.5" height="0.1" depth="0.2" color="#ffffff"></a-box>
+      <a-box position="0 1.4 -0.5" width="4.5" height="0.1" depth="0.2" color="#ffffff"></a-box>
+      <a-box position="0 2.3 -0.5" width="4.5" height="0.1" depth="0.2" color="#ffffff"></a-box>
+    </a-entity>
+
+    <!-- A2: AI & ML Section -->
+    <a-entity id="shelf3d-A2" position="7 0 -1">
+      <a-box position="0 1.4 0" width="4.8" height="2.8" depth="0.9" color="#6355d8"></a-box>
+      <a-text value="A2 · AI & ML SECTION" position="0 3.1 -0.5" align="center" width="6" color="#ffffff"></a-text>
+      <a-box position="0 0.5 -0.5" width="4.5" height="0.1" depth="0.2" color="#ffffff"></a-box>
+      <a-box position="0 1.4 -0.5" width="4.5" height="0.1" depth="0.2" color="#ffffff"></a-box>
+      <a-box position="0 2.3 -0.5" width="4.5" height="0.1" depth="0.2" color="#ffffff"></a-box>
+    </a-entity>
+
+    <!-- CS_SHELF: Computer Science -->
+    <a-entity id="shelf3d-CS_SHELF" position="-7 0 -9">
+      <a-box position="0 1.4 0" width="4.8" height="2.8" depth="0.9" color="#3d5a80"></a-box>
+      <a-text value="CS · COMPUTER SCIENCE" position="0 3.1 -0.5" align="center" width="6" color="#ffffff"></a-text>
+      <a-box position="0 0.5 -0.5" width="4.5" height="0.1" depth="0.2" color="#ffffff"></a-box>
+      <a-box position="0 1.4 -0.5" width="4.5" height="0.1" depth="0.2" color="#ffffff"></a-box>
+      <a-box position="0 2.3 -0.5" width="4.5" height="0.1" depth="0.2" color="#ffffff"></a-box>
+    </a-entity>
+
+    <!-- AI_SHELF: Artificial Intelligence -->
+    <a-entity id="shelf3d-AI_SHELF" position="7 0 -9">
+      <a-box position="0 1.4 0" width="4.8" height="2.8" depth="0.9" color="#3d5a80"></a-box>
+      <a-text value="AI · ARTIFICIAL INTELLIGENCE" position="0 3.1 -0.5" align="center" width="6" color="#ffffff"></a-text>
+      <a-box position="0 0.5 -0.5" width="4.5" height="0.1" depth="0.2" color="#ffffff"></a-box>
+      <a-box position="0 1.4 -0.5" width="4.5" height="0.1" depth="0.2" color="#ffffff"></a-box>
+      <a-box position="0 2.3 -0.5" width="4.5" height="0.1" depth="0.2" color="#ffffff"></a-box>
+    </a-entity>
+
+    <!-- DB_SHELF: Database -->
+    <a-entity id="shelf3d-DB_SHELF" position="0 0 -12">
+      <a-box position="0 1.4 0" width="5.4" height="2.8" depth="0.9" color="#3d5a80"></a-box>
+      <a-text value="DB · DATABASE & ARCHITECTURE" position="0 3.1 -0.5" align="center" width="6" color="#ffffff"></a-text>
+      <a-box position="0 0.5 -0.5" width="5.0" height="0.1" depth="0.2" color="#ffffff"></a-box>
+      <a-box position="0 1.4 -0.5" width="5.0" height="0.1" depth="0.2" color="#ffffff"></a-box>
+      <a-box position="0 2.3 -0.5" width="5.0" height="0.1" depth="0.2" color="#ffffff"></a-box>
+    </a-entity>
+
+    <!-- NETWORK_SHELF: Networks -->
+    <a-entity id="shelf3d-NETWORK_SHELF" position="7 0 -15">
+      <a-box position="0 1.4 0" width="4.8" height="2.8" depth="0.9" color="#3d5a80"></a-box>
+      <a-text value="NETWORK · NETWORKS & CLOUD" position="0 3.1 -0.5" align="center" width="6" color="#ffffff"></a-text>
+      <a-box position="0 0.5 -0.5" width="4.5" height="0.1" depth="0.2" color="#ffffff"></a-box>
+      <a-box position="0 1.4 -0.5" width="4.5" height="0.1" depth="0.2" color="#ffffff"></a-box>
+      <a-box position="0 2.3 -0.5" width="4.5" height="0.1" depth="0.2" color="#ffffff"></a-box>
+    </a-entity>
+
+    <!-- 3D Waypoint Path Container -->
+    <a-entity id="scene3dWaypoints"></a-entity>
+
+    <!-- Glowing Destination Beacon -->
+    <a-entity id="destinationBeacon" visible="false">
+      <a-cylinder position="0 3 0" radius="0.4" height="6" material="color:#6355d8;opacity:0.3;transparent:true"></a-cylinder>
+      <a-ring position="0 0.05 0" rotation="-90 0 0" radius-inner="0.6" radius-outer="0.9" color="#8a7cf0" material="opacity:0.8"></a-ring>
+      <a-cone position="0 3.6 0" rotation="180 0 0" radius-bottom="0.4" radius-top="0.02" height="0.7" color="#ffdd00"></a-cone>
+      <a-text id="beaconText" value="DESTINATION" position="0 4.3 0" align="center" width="7" color="#ffffff"></a-text>
+    </a-entity>
+  </a-scene>
+
+  <!-- CAMERA AR SCENE (AR.js + WebRTC) -->
+  <a-scene id="arScene" class="active" embedded vr-mode-ui="enabled:false" device-orientation-permission-ui="enabled: false" renderer="alpha:true;antialias:true;precision:mediump" arjs="sourceType:webcam;trackingMethod:best;debugUIEnabled:false;">
+    <a-marker id="hiroMarker" preset="hiro" emitevents="true">
+      <a-ring position="0 0.03 0" rotation="-90 0 0" radius-inner="0.65" radius-outer="0.8" color="#6355d8"></a-ring>
+      <a-box position="0 0.4 0" width="1.6" height="0.6" depth="0.3" material="color:#6355d8;opacity:0.95"></a-box>
+      <a-text id="arMarkerShelfText" value="DESTINATION SHELF" position="0 0.85 0" scale="0.8 0.8 0.8" color="#fff" align="center"></a-text>
+      <a-cone position="0 1.4 0" rotation="180 0 0" radius-bottom="0.25" radius-top="0.02" height="0.45" color="#ffd700"></a-cone>
+    </a-marker>
+    <a-entity camera></a-entity>
+  </a-scene>
+
+<script>
+/**
+ * LibAR Movement-Responsive Navigation Engine
+ */
+(function(){
+  'use strict';
+
+  const $ = id => document.getElementById(id);
+  const params = new URLSearchParams(location.search);
+
+  const bookTitle = params.get('title') || 'Introduction to Algorithms';
+  const targetShelf = (params.get('shelf') || 'A1').toUpperCase();
+  const shelfLabel = params.get('shelf_label') || targetShelf.replaceAll('_', ' ');
+  const floorNum = params.get('floor') || '1';
+  const rawRoute = params.get('route') || 'ENTRANCE→MAIN_DESK→A1';
+  const route = rawRoute.split('→').map(n => n.trim().toUpperCase()).filter(Boolean);
+  const initialMode = params.get('mode') || 'camera'; // 'camera' or 'desktop'
+
+  // Node coordinates (3D meters)
+  const nodePositions = {
+    ENTRANCE: [0, 0, 7],
+    MAIN_DESK: [0, 0, 4],
+    A1: [-7, 0, -1],
+    A2: [7, 0, -1],
+    CS_SHELF: [-7, 0, -9],
+    AI_SHELF: [7, 0, -9],
+    DB_SHELF: [0, 0, -12],
+    NETWORK_SHELF: [7, 0, -15],
+    EXIT: [7, 0, -19]
+  };
+
+  // State
+  let currentStep = 0;
+  let isCameraMode = (initialMode !== 'desktop');
+  let currentHeading = 0;
+  let targetBearing = 0;
+  let headingOffset = 0;
+  let speechEnabled = true;
+  let torchEnabled = false;
+  let videoTrack = null;
+  let maneuvers = [];
+
+  // Mobile Orientation smoothing (EMA)
+  let smoothedAlpha = 0;
+  let smoothedBeta = 0;
+  let smoothedGamma = 0;
+  const SMOOTH_FACTOR = 0.25;
+
+  // Desktop controls fallback
+  let keys = new Set();
+  let dragging = false;
+  let lastMouseX = 0, lastMouseY = 0;
+  let manualYaw = 0, manualPitch = 0;
+  let virtualPos = { x: 0, y: 1.6, z: 7 };
+
+  // DOM Elements
+  const cameraRig = $('cameraRig');
+  const virtualCamera = $('virtualCamera');
+  const desktopScene = $('desktopScene');
+  const arScene = $('arScene');
+  const spatialArrowSvg = $('arArrowSvg');
+  const headingBanner = $('headingBanner');
+  const maneuverIcon = $('maneuverIcon');
+  const stepInstruction = $('stepInstruction');
+  const stepSubtext = $('stepSubtext');
+  const progressFill = $('progressFill');
+  const statusDot = $('statusDot');
+  const trackingText = $('trackingText');
+
+  // Initialize UI Metadata
+  $('hudBookTitle').textContent = bookTitle;
+  $('hudDestination').textContent = `📍 Shelf: ${shelfLabel} · Floor ${floorNum}`;
+  $('arMarkerShelfText').setAttribute('value', shelfLabel);
+
+  // Compute turn-by-turn maneuvers dynamically
+  function computeManeuvers() {
+    maneuvers = [];
+    for (let i = 0; i < route.length - 1; i++) {
+      const from = route[i];
+      const to = route[i + 1];
+      const p1 = nodePositions[from] || [0, 0, 0];
+      const p2 = nodePositions[to] || [0, 0, 0];
+      const dx = p2[0] - p1[0];
+      const dz = p2[2] - p1[2];
+      const dist = Math.hypot(dx, dz) || 3.0;
+
+      // Bearing in degrees from North (-Z is North, +X is East)
+      let bearing = (Math.atan2(dx, -dz) * (180 / Math.PI) + 360) % 360;
+
+      let instruction = `Proceed from ${from.replaceAll('_', ' ')} to ${to.replaceAll('_', ' ')}`;
+      let icon = '↑';
+
+      if (i === 0) {
+        instruction = `Start at Entrance and proceed toward ${to.replaceAll('_', ' ')}`;
+        icon = '↑';
+      } else if (i === route.length - 2) {
+        instruction = `Turn toward destination shelf ${shelfLabel}`;
+        icon = '📍';
+      } else {
+        const prev = route[i - 1];
+        const p0 = nodePositions[prev] || [0, 0, 0];
+        const prevDx = p1[0] - p0[0];
+        const prevDz = p1[2] - p0[2];
+        const prevBearing = (Math.atan2(prevDx, -prevDz) * (180 / Math.PI) + 360) % 360;
+        const diff = (bearing - prevBearing + 540) % 360 - 180;
+
+        if (diff > 25) { icon = '→'; instruction = `Turn right toward ${to.replaceAll('_', ' ')}`; }
+        else if (diff < -25) { icon = '←'; instruction = `Turn left toward ${to.replaceAll('_', ' ')}`; }
+        else { icon = '↑'; instruction = `Continue straight toward ${to.replaceAll('_', ' ')}`; }
+      }
+
+      maneuvers.push({
+        from, to, dist: dist.toFixed(1), bearing, instruction, icon,
+        fromPos: p1, toPos: p2
+      });
+    }
+  }
+
+  // Update navigation step display
+  function updateNavigation() {
+    if (currentStep >= maneuvers.length) {
+      maneuverIcon.textContent = '✓';
+      maneuverIcon.style.background = '#10b981';
+      stepInstruction.textContent = `✓ Arrived at ${shelfLabel}`;
+      stepSubtext.textContent = 'Destination shelf reached on this floor';
+      progressFill.style.width = '100%';
+      $('nextStepBtn').disabled = true;
+      $('prevStepBtn').disabled = false;
+      showArrival();
+      return;
+    }
+
+    const m = maneuvers[currentStep];
+    maneuverIcon.textContent = m.icon;
+    maneuverIcon.style.background = 'linear-gradient(135deg, #6355d8, #4f42b5)';
+    stepInstruction.textContent = m.instruction;
+    stepSubtext.textContent = `Step ${currentStep + 1} of ${maneuvers.length} · ${m.dist} meters`;
+    targetBearing = m.bearing;
+
+    const progressPct = ((currentStep) / Math.max(maneuvers.length, 1)) * 100;
+    progressFill.style.width = progressPct + '%';
+
+    $('prevStepBtn').disabled = (currentStep === 0);
+    $('nextStepBtn').disabled = false;
+
+    // Render Step Dots
+    const dotsWrap = $('stepDots');
+    dotsWrap.innerHTML = '';
+    for (let i = 0; i < maneuvers.length; i++) {
+      const d = document.createElement('div');
+      d.className = 'step-dot ' + (i === currentStep ? 'active' : (i < currentStep ? 'done' : ''));
+      dotsWrap.appendChild(d);
+    }
+
+    // Voice announcement
+    if (speechEnabled && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(m.instruction);
+      utterance.rate = 1.05;
+      window.speechSynthesis.speak(utterance);
+    }
+
+    // Move 3D beacon to target shelf
+    const destPos = nodePositions[targetShelf];
+    if (destPos) {
+      const beacon = $('destinationBeacon');
+      beacon.setAttribute('visible', 'true');
+      beacon.setAttribute('position', `${destPos[0]} 0 ${destPos[2]}`);
+      $('beaconText').setAttribute('value', shelfLabel);
+    }
+
+    updateSpatialArrow();
+  }
+
+  // Calculate and animate spatial AR direction arrow
+  function updateSpatialArrow() {
+    if (currentStep >= maneuvers.length) {
+      spatialArrowSvg.setAttribute('fill', '#10b981');
+      spatialArrowSvg.style.transform = 'rotate(0deg)';
+      headingBanner.textContent = '✓ Destination Reached';
+      return;
+    }
+
+    // Angular difference between user's phone heading and target bearing
+    let angleDiff = (targetBearing - (currentHeading - headingOffset) + 540) % 360 - 180;
+
+    // Rotate arrow SVG to point in real-world direction
+    spatialArrowSvg.style.transform = `rotate(${angleDiff}deg)`;
+
+    if (Math.abs(angleDiff) < 20) {
+      spatialArrowSvg.setAttribute('fill', '#10b981'); // Green = Straight
+      headingBanner.textContent = `Head Straight Ahead · ${maneuvers[currentStep].dist}m`;
+    } else if (angleDiff > 0) {
+      spatialArrowSvg.setAttribute('fill', angleDiff > 60 ? '#ef4444' : '#f59e0b');
+      headingBanner.textContent = `Turn Right ${Math.round(angleDiff)}°`;
+    } else {
+      spatialArrowSvg.setAttribute('fill', angleDiff < -60 ? '#ef4444' : '#f59e0b');
+      headingBanner.textContent = `Turn Left ${Math.round(Math.abs(angleDiff))}°`;
+    }
+  }
+
+  // Build 3D Waypoints in Virtual Scene
+  function build3dWaypoints() {
+    const group = $('scene3dWaypoints');
+    group.innerHTML = '';
+
+    route.forEach((node, i) => {
+      const pos = nodePositions[node];
+      if (!pos) return;
+
+      // Floor Waypoint Disc
+      const disc = document.createElement('a-cylinder');
+      disc.setAttribute('position', `${pos[0]} 0.04 ${pos[2]}`);
+      disc.setAttribute('radius', i === currentStep ? '0.35' : '0.18');
+      disc.setAttribute('height', '0.04');
+      disc.setAttribute('color', i === currentStep ? '#ffffff' : (i < currentStep ? '#10b981' : '#6355d8'));
+      disc.setAttribute('material', 'opacity: 0.9');
+      group.appendChild(disc);
+
+      // Connecting Floor Pathway
+      if (i < route.length - 1) {
+        const nextPos = nodePositions[route[i + 1]];
+        if (nextPos) {
+          const midX = (pos[0] + nextPos[0]) / 2;
+          const midZ = (pos[2] + nextPos[2]) / 2;
+          const dist = Math.hypot(nextPos[0] - pos[0], nextPos[2] - pos[2]);
+          const angle = Math.atan2(nextPos[0] - pos[0], nextPos[2] - pos[2]) * (180 / Math.PI);
+
+          const pathway = document.createElement('a-plane');
+          pathway.setAttribute('position', `${midX} 0.02 ${midZ}`);
+          pathway.setAttribute('rotation', `-90 ${angle} 0`);
+          pathway.setAttribute('width', '0.35');
+          pathway.setAttribute('height', dist);
+          pathway.setAttribute('color', '#6355d8');
+          pathway.setAttribute('material', 'opacity: 0.7; transparent: true');
+          group.appendChild(pathway);
+        }
+      }
+    });
+  }
+
+  // Mode Switcher (Camera AR vs 3D Virtual)
+  function setMode(camera) {
+    isCameraMode = camera;
+    $('modeCameraAr').classList.toggle('active', camera);
+    $('mode3dVirtual').classList.toggle('active', !camera);
+    arScene.classList.toggle('active', camera);
+    desktopScene.classList.toggle('active', !camera);
+    $('spatialArOverlay').style.display = camera ? 'flex' : 'none';
+    $('virtualJoystick').classList.toggle('active', !camera);
+
+    if (!camera) {
+      // Teleport camera rig to current step position
+      if (maneuvers[currentStep]) {
+        const p = maneuvers[currentStep].fromPos;
+        virtualPos = { x: p[0], y: 1.6, z: p[2] + 1 };
+        cameraRig.setAttribute('position', `${virtualPos.x} ${virtualPos.y} ${virtualPos.z}`);
+      }
+      build3dWaypoints();
+    }
+  }
+
+  // Device Orientation Handler (iOS & Android)
+  function handleOrientation(e) {
+    let heading = 0;
+
+    // iOS webkitCompassHeading
+    if (e.webkitCompassHeading !== undefined) {
+      heading = e.webkitCompassHeading;
+    } else if (e.alpha !== null) {
+      // Android absolute orientation
+      heading = 360 - e.alpha;
+    }
+
+    // Low-pass exponential smoothing
+    smoothedAlpha += (heading - smoothedAlpha) * SMOOTH_FACTOR;
+    smoothedBeta += ((e.beta || 0) - smoothedBeta) * SMOOTH_FACTOR;
+    smoothedGamma += ((e.gamma || 0) - smoothedGamma) * SMOOTH_FACTOR;
+
+    currentHeading = smoothedAlpha;
+
+    // Sync Virtual 3D Camera with Gyroscope rotation
+    if (!isCameraMode && virtualCamera) {
+      const pitch = Math.max(-80, Math.min(80, smoothedBeta - 70));
+      const yaw = -(smoothedAlpha - headingOffset);
+      virtualCamera.setAttribute('rotation', `${pitch} ${yaw + manualYaw} 0`);
+    }
+
+    updateSpatialArrow();
+  }
+
+  // Dismiss permission modal safely and restore UI access
+  function dismissModal(reason) {
+    const modal = $('permissionModal');
+    if (modal) {
+      modal.classList.add('hidden');
+      modal.style.display = 'none';
+      modal.style.pointerEvents = 'none';
+      modal.style.visibility = 'hidden';
+      modal.style.opacity = '0';
+    }
+    if (reason) {
+      trackingText.textContent = reason;
+    }
+  }
+
+  // Permission Request (iOS 13+ and standard browsers)
+  function requestSensors(e) {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+
+    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+      DeviceOrientationEvent.requestPermission()
+        .then(state => {
+          if (state === 'granted') {
+            try {
+              window.addEventListener('deviceorientation', handleOrientation, true);
+            } catch (err) {}
+            trackingText.textContent = 'Sensors Synced · Live Gyro';
+            statusDot.style.background = '#10b981';
+            dismissModal();
+          } else {
+            console.warn('DeviceOrientation permission state:', state);
+            trackingText.textContent = 'Manual Mode (Sensor Blocked)';
+            statusDot.style.background = '#f59e0b';
+            dismissModal('Manual Mode');
+          }
+        })
+        .catch(err => {
+          console.warn('DeviceOrientation permission error:', err);
+          trackingText.textContent = 'Manual Mode (Sensors Unavailable)';
+          statusDot.style.background = '#f59e0b';
+          dismissModal('Manual Mode');
+        });
+    } else {
+      // Android / Standard non-permission browser
+      try {
+        window.addEventListener('deviceorientationabsolute', handleOrientation, true);
+        window.addEventListener('deviceorientation', handleOrientation, true);
+        trackingText.textContent = 'Sensors Active · Gyro Synced';
+        statusDot.style.background = '#10b981';
+      } catch (err) {
+        console.warn('Error attaching orientation listeners:', err);
+      }
+      dismissModal();
+    }
+  }
+
+  // Show Arrival Celebration
+  function showArrival() {
+    $('arrivalShelfText').textContent = `Your book is located on shelf ${shelfLabel}`;
+    $('arrivalBanner').classList.add('show');
+    if ('vibrate' in navigator) {
+      navigator.vibrate([150, 80, 150, 80, 250]);
+    }
+  }
+
+  // Virtual Joystick & Touch Locomotion for 3D View
+  function initJoystick() {
+    const stick = $('virtualJoystick');
+    const knob = $('joystickKnob');
+    let touchId = null;
+    let startX = 0, startY = 0;
+
+    stick.addEventListener('touchstart', e => {
+      const t = e.changedTouches[0];
+      touchId = t.identifier;
+      startX = t.clientX;
+      startY = t.clientY;
+    });
+
+    stick.addEventListener('touchmove', e => {
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        const t = e.changedTouches[i];
+        if (t.identifier === touchId) {
+          const dx = t.clientX - startX;
+          const dy = t.clientY - startY;
+          const dist = Math.min(35, Math.hypot(dx, dy));
+          const angle = Math.atan2(dy, dx);
+          knob.style.transform = `translate(${Math.cos(angle)*dist}px, ${Math.sin(angle)*dist}px)`;
+
+          // Move camera rig in 3D scene
+          const speed = 0.08;
+          const yawRad = (-(currentHeading - headingOffset + manualYaw)) * (Math.PI / 180);
+          virtualPos.x += (Math.cos(angle) * Math.cos(yawRad) - Math.sin(angle) * Math.sin(yawRad)) * speed;
+          virtualPos.z += (Math.cos(angle) * Math.sin(yawRad) + Math.sin(angle) * Math.cos(yawRad)) * speed;
+          cameraRig.setAttribute('position', `${virtualPos.x} ${virtualPos.y} ${virtualPos.z}`);
+        }
+      }
+    });
+
+    const resetKnob = () => {
+      knob.style.transform = 'translate(0, 0)';
+      touchId = null;
+    };
+    stick.addEventListener('touchend', resetKnob);
+    stick.addEventListener('touchcancel', resetKnob);
+  }
+
+  // Desktop Mouse Look & Keyboard Locomotion Fallback
+  function initDesktopControls() {
+    window.addEventListener('keydown', e => {
+      const k = e.key.toLowerCase();
+      if (['w', 'a', 's', 'd'].includes(k)) keys.add(k);
+      if (k === 'r') { headingOffset = currentHeading; manualYaw = 0; }
+    });
+    window.addEventListener('keyup', e => keys.delete(e.key.toLowerCase()));
+
+    desktopScene.addEventListener('mousedown', e => {
+      dragging = true;
+      lastMouseX = e.clientX;
+      lastMouseY = e.clientY;
+    });
+    window.addEventListener('mouseup', () => dragging = false);
+    window.addEventListener('mousemove', e => {
+      if (!dragging || isCameraMode) return;
+      const dx = e.clientX - lastMouseX;
+      const dy = e.clientY - lastMouseY;
+      lastMouseX = e.clientX;
+      lastMouseY = e.clientY;
+      manualYaw -= dx * 0.3;
+      manualPitch = Math.max(-80, Math.min(80, manualPitch - dy * 0.2));
+      virtualCamera.setAttribute('rotation', `${manualPitch} ${manualYaw} 0`);
+    });
+
+    // Game loop for smooth movement
+    function loop() {
+      if (!isCameraMode && keys.size > 0) {
+        const speed = 0.12;
+        let moveX = 0, moveZ = 0;
+        if (keys.has('w')) moveZ -= 1;
+        if (keys.has('s')) moveZ += 1;
+        if (keys.has('a')) moveX -= 1;
+        if (keys.has('d')) moveX += 1;
+        const rad = (manualYaw) * (Math.PI / 180);
+        virtualPos.x += (moveX * Math.cos(rad) + moveZ * Math.sin(rad)) * speed;
+        virtualPos.z += (-moveX * Math.sin(rad) + moveZ * Math.cos(rad)) * speed;
+        cameraRig.setAttribute('position', `${virtualPos.x} ${virtualPos.y} ${virtualPos.z}`);
+      }
+      requestAnimationFrame(loop);
+    }
+    requestAnimationFrame(loop);
+  }
+
+  // Setup Event Listeners
+  function init() {
+    computeManeuvers();
+    updateNavigation();
+    setMode(isCameraMode);
+    initJoystick();
+    initDesktopControls();
+
+    // Permissions check
+    const requiresUserGesture = (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function');
+    const modal = $('permissionModal');
+
+    if (requiresUserGesture) {
+      if (modal) {
+        modal.classList.remove('hidden');
+        modal.style.display = 'flex';
+        modal.style.pointerEvents = 'auto';
+        modal.style.visibility = 'visible';
+        modal.style.opacity = '1';
+      }
+    } else {
+      requestSensors();
+    }
+
+    // Modal action buttons
+    const grantBtn = $('grantPermissionBtn');
+    if (grantBtn) {
+      grantBtn.addEventListener('click', requestSensors);
+      grantBtn.addEventListener('touchend', requestSensors);
+    }
+
+    const manualBtn = $('manualModeBtn');
+    if (manualBtn) {
+      const enableManual = (e) => {
+        if (e) { e.preventDefault(); e.stopPropagation(); }
+        dismissModal('Manual Touch Mode Active');
+        statusDot.style.background = '#8a7cf0';
+      };
+      manualBtn.addEventListener('click', enableManual);
+      manualBtn.addEventListener('touchend', enableManual);
+    }
+
+    const closeBtn = $('closePermModalBtn');
+    if (closeBtn) {
+      const closeModal = (e) => {
+        if (e) { e.preventDefault(); e.stopPropagation(); }
+        dismissModal('Manual Touch Mode');
+      };
+      closeBtn.addEventListener('click', closeModal);
+      closeBtn.addEventListener('touchend', closeModal);
+    }
+
+    // Mode Buttons
+    $('modeCameraAr').addEventListener('click', () => setMode(true));
+    $('mode3dVirtual').addEventListener('click', () => setMode(false));
+
+    // Recenter
+    $('recenterBtn').addEventListener('click', () => {
+      headingOffset = currentHeading;
+      manualYaw = 0;
+      updateSpatialArrow();
+      trackingText.textContent = 'Viewpoint Calibrated';
+    });
+
+    // Step Advancement
+    $('nextStepBtn').addEventListener('click', () => {
+      if (currentStep < maneuvers.length) {
+        currentStep++;
+        updateNavigation();
+      }
+    });
+
+    $('prevStepBtn').addEventListener('click', () => {
+      if (currentStep > 0) {
+        currentStep--;
+        updateNavigation();
+      }
+    });
+
+    $('stepAdvanceBtn').addEventListener('click', () => {
+      if (currentStep < maneuvers.length) {
+        currentStep++;
+        updateNavigation();
+      }
+    });
+
+    // Speech toggle
+    $('speechBtn').addEventListener('click', () => {
+      speechEnabled = !speechEnabled;
+      $('speechBtn').classList.toggle('active', speechEnabled);
+    });
+    $('speechBtn').classList.toggle('active', speechEnabled);
+
+    // Torch toggle
+    $('torchBtn').addEventListener('click', async () => {
+      try {
+        if (!videoTrack) {
+          const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+          videoTrack = stream.getVideoTracks()[0];
+        }
+        torchEnabled = !torchEnabled;
+        await videoTrack.applyConstraints({ advanced: [{ torch: torchEnabled }] });
+        $('torchBtn').classList.toggle('active', torchEnabled);
+      } catch (err) {
+        console.log('Torch not supported:', err);
+      }
+    });
+
+    // AR.js Marker Tracking Handlers
+    $('hiroMarker').addEventListener('markerFound', () => {
+      trackingText.textContent = '🎯 Optical Marker Detected';
+      statusDot.style.background = '#10b981';
+    });
+    $('hiroMarker').addEventListener('markerLost', () => {
+      trackingText.textContent = '📡 Spatial Compass Guidance';
+      statusDot.style.background = '#6355d8';
+    });
+  }
+
+  window.addEventListener('DOMContentLoaded', init);
+})();
+</script>
+</body>
+</html>
